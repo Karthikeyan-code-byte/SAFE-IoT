@@ -1,0 +1,28 @@
+#include <ESP32Servo.h>
+
+// Create a servo object
+Servo myServo;  
+
+// Define the GPIO pin connected to the servo signal wire
+const int servoPin = 13; 
+
+void setup() {
+  // Attach the servo to the specified GPIO pin
+  // (Standard servos operate on a 50Hz signal)
+  myServo.setPeriodHertz(50);
+  myServo.attach(servoPin, 500, 2400); // 500us and 2400us are standard min/max pulse widths
+}
+
+void loop() {
+  // Sweep from 0 to 180 degrees
+  for (int pos = 0; pos <= 180; pos += 1) { 
+    myServo.write(pos);      // Tell servo to go to position 'pos'
+    delay(15);               // Wait 15ms for the servo to reach the position
+  }
+  
+  // Sweep from 180 back to 0 degrees
+  for (int pos = 180; pos >= 0; pos -= 1) { 
+    myServo.write(pos);      
+    delay(15);               
+  }
+}
