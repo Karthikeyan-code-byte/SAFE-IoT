@@ -1,0 +1,79 @@
+#include <WiFi.h>
+#include <WebServer.h>
+
+// Replace with your network credentials
+const char* ssid = "YOUR_WIFI_NAME";
+const char* password = "YOUR_WIFI_PASSWORD";
+
+// Define the LED pin (GPIO 2 is the onboard LED for most ESP32 boards)
+const int ledPin = 2;
+
+// Create a web server running on port 80
+WebServer server(80);
+
+// HTML for the webpage
+const char htmlPage[] PROGMEM = R"=====(
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial; text-align: center; margin-top: 50px; }
+    .btn { background-color: #4CAF50; color: white; padding: 16px 40px; 
+           font-size: 22px; border: none; border-radius: 4px; cursor: pointer; margin: 10px; }
+    .btn-off { background-color: #f44336; }
+  </style>
+</head>
+<body>
+  <h1>ESP32 Web Server</h1>
+  <p>LED Control</p>
+  <a href="/on"><button class="btn">TURN ON</button></a><br>
+  <a href="/off"><button class="btn btn-off">TURN OFF</button></a>
+</body>
+</html>
+)=====";
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW); // Start with LED off
+
+  // Connect to Wi-Fi
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.println("WiFi connected.");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP()); // You will need this IP address to access the server!
+
+  // Define routing for the web server
+  server.on("/", []() {
+    server.send(200, "text/html", htmlPage);
+  });
+
+  server.on("/on", []() {
+    digitalWrite(ledPin, HIGH);
+    server.send(200, "text/html", htmlPage); // Reload page
+  });
+
+  server.on("/off", []() {
+    digitalWrite(ledPin, LOW);
+    server.send(200, "text/html", htmlPage); // Reload page
+  });
+
+  // Start the server
+  server.begin();
+  Serial.println("HTTP server started");
+}
+
+void loop() {
+  // Listen for incoming clients
+  server.handleClient();
+}
