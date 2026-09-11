@@ -1,7 +1,7 @@
 /*******************************************************************************
  * SMART HOME SAFETY & ENVIRONMENTAL MONITORING SYSTEM (ESP32-S3)
  * Hardware: ESP32-S3 Dev Module
- * Sensors: MQ-2 Gas (GPIO 4), Temp Sensor (GPIO 5), Ultrasonic (GPIO 6/7), IR (GPIO 15)
+ * Sensors: MQ-2 Gas (GPIO 4), Ultrasonic (GPIO 6/7), IR (GPIO 15)
  * Actuators: Servo Motor (GPIO 16 - EXTERNALLY POWERED), Red LED (GPIO 18), Green LED (GPIO 8), Buzzer (GPIO 17)
  *******************************************************************************/
 
@@ -19,7 +19,6 @@ const char* WIFI_PASS = "9gpjhvji";
 // 2. HARDWARE PIN DEFINITIONS (ESP32-S3)
 // =============================================================================
 #define MQ2_PIN        4    // ADC1_CH3
-#define TEMP_PIN       5    // ADC1_CH4 (Analog input from LM35 Temp)
 #define TRIG_PIN       6    // Ultrasonic HC-SR04 Trigger pin
 #define ECHO_PIN       7    // Ultrasonic HC-SR04 Echo pin
 #define IR_PIN         15   // IR module Digital Output pin
@@ -30,7 +29,6 @@ const char* WIFI_PASS = "9gpjhvji";
 
 // Safety Thresholds
 const int GAS_THRESHOLD = 800;             // Gas raw ADC threshold (0 - 4095)
-const float TEMP_THRESHOLD = 45.0;         // Temperature threshold in °C
 const int DISTANCE_THRESHOLD_CM = 15;      // Distance threshold in cm
 const unsigned long GAS_WARMUP_MS = 20000; // MQ-2 warm-up time (20s)
 
@@ -39,7 +37,6 @@ Servo doorServo;
 WebServer server(80);
 
 int gasLevel = 0;
-float tempC = 0.0;
 float distanceCM = 0.0;
 bool isDark = false;
 bool isHazard = false;
@@ -64,12 +61,6 @@ float readDistanceCM() {
   return (duration * 0.0343) / 2.0;
 }
 
-float readTemperature() {
-  int rawAnalog = analogRead(TEMP_PIN);
-  float voltage = (rawAnalog / 4095.0) * 3.3;
-  return voltage * 100.0; // LM35 outputs 10mV/°C
-}
-
 void triggerBuzzer(bool enable) {
   if (enable) {
     tone(BUZZER_PIN, 1800);
@@ -83,7 +74,6 @@ void triggerBuzzer(bool enable) {
 // =============================================================================
 void handleData() {
   String json = "{";
-  json += "\"temp\":" + String(tempC, 1) + ",";
   json += "\"gas\":" + String(gasLevel) + ",";
   json += "\"gasReady\":" + String(gasReady ? "true" : "false") + ",";
   json += "\"dist\":" + String(distanceCM, 1) + ",";
@@ -115,10 +105,10 @@ void handleRoot() {
     .status-banner { width: 100%; max-width: 500px; padding: 15px; border-radius: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; background: #1e293b; }
     .status-banner.safe { border: 1px solid #10b981; }
     .status-banner.alarm { border: 1px solid #ef4444; background: rgba(239,68,68,0.2); }
-    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; width: 100%; max-width: 500px; }
-    .card { background: #1e293b; padding: 18px; border-radius: 12px; border: 1px solid #334155; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; max-width: 500px; }
+    .card { background: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155; }
     .card h3 { font-size: 0.75rem; text-transform: uppercase; color: #94a3b8; }
-    .card .value { font-size: 1.8rem; font-weight: bold; margin-top: 5px; }
+    .card .value { font-size: 1.5rem; font-weight: bold; margin-top: 5px; }
     .btn { background: #0284c7; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
   </style>
 </head>
@@ -141,13 +131,9 @@ void handleRoot() {
 
   <div class="grid">
     <div class="card">
-      <h3>Temperature</h3>
-      <div class="value"><span id="temp">--</span> °C</div>
-    </div>
-    <div class="card">
       <h3>Gas Sensor</h3>
       <div class="value"><span id="gas">--</span></div>
-      <div id="gasStatus" style="font-size:0.7rem; color:#94a3b8;">Warming up...</div>
+      <div id="gasStatus" style="font-size:0.65rem; color:#94a3b8; margin-top:3px;">Warming up...</div>
     </div>
     <div class="card">
       <h3>Proximity</h3>
@@ -155,7 +141,7 @@ void handleRoot() {
     </div>
     <div class="card">
       <h3>Ambient Light</h3>
-      <div class="value" id="lightText">--</div>
+      <div class="value" id="lightText" style="font-size:1.2rem; margin-top:8px;">--</div>
     </div>
   </div>
 
@@ -172,7 +158,6 @@ void handleRoot() {
       fetch('/data')
         .then(res => res.json())
         .then(data => {
-          document.getElementById('temp').innerText = data.temp;
           document.getElementById('gas').innerText = data.gasReady ? data.gas : '--';
           document.getElementById('gasStatus').innerText = data.gasReady ? 'Live reading' : 'Warming up...';
           document.getElementById('dist').innerText = data.dist;
@@ -235,10 +220,6 @@ void setup() {
   // =============================================================================
   // WI-FI + GUARANTEED DASHBOARD ACCESS
   // =============================================================================
-  // The ESP32-S3 creates its own Access Point AND tries your normal Wi-Fi.
-  // Therefore an IP address is always available even if the phone hotspot fails.
-  // AP dashboard: http://192.168.4.1
-
   WiFi.mode(WIFI_AP_STA);
   WiFi.setAutoReconnect(true);
   WiFi.persistent(false);
@@ -337,7 +318,6 @@ void loop() {
   }
 
   // PRINT DASHBOARD IP EVERY 5 SECONDS
-  // AP IP is always available, even if normal Wi-Fi is disconnected.
   if (millis() - lastIpPrintTime > 5000) {
     lastIpPrintTime = millis();
 
@@ -354,12 +334,12 @@ void loop() {
   }
 
   gasLevel = analogRead(MQ2_PIN);
-  tempC = readTemperature();
   distanceCM = readDistanceCM();
   
   isDark = (digitalRead(IR_PIN) == LOW);
 
-  isHazard = (tempC > TEMP_THRESHOLD) || (gasReady && gasLevel > GAS_THRESHOLD);
+  // Hazard State Evaluation (gas trigger only)
+  isHazard = (gasReady && gasLevel > GAS_THRESHOLD);
 
   if ((distanceCM < DISTANCE_THRESHOLD_CM || manualGateOpen) && !isHazard) {
     doorServo.write(90);
